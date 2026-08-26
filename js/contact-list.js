@@ -490,7 +490,12 @@
         });
     }
 
+    var started = false;
+
     function init() {
+        if (started) return;
+        started = true;
+
         var tables = document.querySelectorAll('.contact-table');
         for (var i = 0; i < tables.length; i++) {
             formatTablePhoneCells(tables[i]);
@@ -506,7 +511,11 @@
         initRowSelection();
     }
 
-    if (document.readyState === 'loading') {
+    window.ContactList = { init: init };
+
+    if (document.body && document.body.getAttribute('data-wait-live-sheet') === 'true') {
+        window.addEventListener('contactlist:tablesready', init);
+    } else if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();
