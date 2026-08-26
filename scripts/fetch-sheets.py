@@ -61,6 +61,11 @@ def main():
     if ok == 0:
         sys.exit(1)
 
+    for gid in GIDS:
+        path = os.path.join(out_dir, gid + ".json")
+        if os.path.exists(path):
+            os.chmod(path, 0o644)
+
 
 if __name__ == "__main__":
     main()
