@@ -2,10 +2,23 @@
     'use strict';
 
     var SHEET_ID = '1ngFj_4NdfiIEkBZeJK90sVQEFIiTdSS7Y0A_0DZwZl4';
-    var MC_GID = '817509336';
-    var SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/edit?gid=' + MC_GID + '#gid=' + MC_GID;
-    var GVIZ_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-        '/gviz/tq?tqx=out:json&gid=' + MC_GID + '&t=' + Date.now();
+    var SHEET_HOME = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/edit';
+
+    var SECTIONS = [
+        { id: 'mc-2526', gid: '1547061093', kind: 'mc', cols: 11 },
+        { id: 'mc-2627', gid: '817509336', kind: 'mc', cols: 12 },
+        { id: 'lc-lcp', gid: '817120236', kind: 'lc', cols: 12 },
+        { id: 'lc-tm', gid: '1737203365', kind: 'lc', cols: 12 },
+        { id: 'lc-ogv', gid: '2077362824', kind: 'lc', cols: 12 },
+        { id: 'lc-igv', gid: '1141905406', kind: 'lc', cols: 12 },
+        { id: 'lc-ogt', gid: '415272296', kind: 'lc', cols: 12 },
+        { id: 'lc-igta', gid: '216502838', kind: 'lc', cols: 12 },
+        { id: 'lc-igte', gid: '2099907944', kind: 'lc', cols: 12 },
+        { id: 'lc-b2c', gid: '2025687208', kind: 'lc', cols: 12 },
+        { id: 'lc-b2b', gid: '1113947137', kind: 'lc', cols: 12 },
+        { id: 'lc-bd', gid: '1937455596', kind: 'lc', cols: 12 },
+        { id: 'lc-fnl', gid: '1885546657', kind: 'lc', cols: 12 }
+    ];
 
     function escapeHtml(str) {
         return String(str == null ? '' : str)
@@ -17,7 +30,7 @@
 
     function cellText(cell) {
         if (!cell) return '';
-        if (cell.f != null && cell.f !== '') return String(cell.f).trim();
+        if (cell.f != null && String(cell.f).trim() !== '') return String(cell.f).trim();
         if (cell.v == null || cell.v === '') return '';
         return String(cell.v).trim();
     }
@@ -51,7 +64,8 @@
 
     function findColumns(cols) {
         return {
-            role: colIndex(cols, function (l) { return l === 'role' || l.indexOf('role') === 0; }),
+            lc: colIndex(cols, function (l) { return l === 'lcs' || l === 'lc' || l.indexOf('lcs') === 0; }),
+            role: colIndex(cols, function (l) { return l === 'role' || /(^| )role$/.test(l); }),
             name: colIndex(cols, function (l) { return l === 'name' || l.indexOf('name') === 0; }),
             phone: colIndex(cols, function (l) { return l.indexOf('phone number 2') === -1 && l.indexOf('phone') !== -1; }),
             phone2: colIndex(cols, function (l) { return l.indexOf('phone number 2') !== -1 || l.indexOf('phone 2') !== -1; }),
@@ -66,12 +80,11 @@
         };
     }
 
-    function buildRowHtml(row, cols) {
+    function buildMcRow(row, cols, includeTelegram) {
         var role = valueAt(row, cols.role);
         var name = valueAt(row, cols.name);
         if (!role && !name) return '';
         if (/^role$/i.test(role)) return '';
-
         var cells = [
             escapeHtml(role),
             escapeHtml(name),
@@ -81,53 +94,108 @@
             escapeHtml(valueAt(row, cols.extraEmail)),
             escapeHtml(valueAt(row, cols.nickname)),
             escapeHtml(valueAt(row, cols.previous)),
+            escapeHtml(valueAt(row, cols.year))
+        ];
+        if (includeTelegram) cells.push(escapeHtml(valueAt(row, cols.telegram)));
+        cells.push(renderLinkOrText(valueAt(row, cols.facebook)));
+        cells.push(renderLinkOrText(valueAt(row, cols.instagram)));
+        return '<tr><td>' + cells.join('</td><td>') + '</td></tr>';
+    }
+
+    function buildLcRow(row, cols) {
+        var lc = valueAt(row, cols.lc);
+        var name = valueAt(row, cols.name);
+        var role = valueAt(row, cols.role);
+        if (!lc && !name && !role) return '';
+        if (/^lcs$/i.test(lc) || /^role$/i.test(role)) return '';
+        var cells = [
+            escapeHtml(lc),
+            escapeHtml(name),
+            escapeHtml(role),
+            escapeHtml(valueAt(row, cols.phone)),
+            escapeHtml(valueAt(row, cols.phone2)),
+            escapeHtml(valueAt(row, cols.email)),
+            escapeHtml(valueAt(row, cols.extraEmail)),
+            escapeHtml(valueAt(row, cols.nickname)),
+            escapeHtml(valueAt(row, cols.previous)),
             escapeHtml(valueAt(row, cols.year)),
-            escapeHtml(valueAt(row, cols.telegram)),
             renderLinkOrText(valueAt(row, cols.facebook)),
             renderLinkOrText(valueAt(row, cols.instagram))
         ];
         return '<tr><td>' + cells.join('</td><td>') + '</td></tr>';
     }
 
-    function renderTable(data) {
-        var tbody = document.getElementById('mc-2627-body');
-        var status = document.getElementById('mc-2627-status');
+    function sheetUrl(gid) {
+        return SHEET_HOME + '?gid=' + gid + '#gid=' + gid;
+    }
+
+    function setStatus(section, message, ok) {
+        var el = document.getElementById(section.id + '-status');
+        if (!el) return;
+        var link = ' <a href="' + sheetUrl(section.gid) + '" target="_blank" rel="noopener">Open this tab</a>';
+        el.innerHTML = message + (ok ? link : link);
+    }
+
+    function renderSection(section, payload) {
+        var tbody = document.getElementById(section.id + '-body');
         if (!tbody) return;
-
-        var table = data && data.table;
-        if (!table || !table.rows || !table.cols) {
-            throw new Error('Unexpected sheet format');
-        }
-
+        var table = payload && payload.table;
+        if (!table || !table.rows || !table.cols) throw new Error('Unexpected sheet format');
         var cols = findColumns(table.cols);
         var html = '';
         for (var i = 0; i < table.rows.length; i++) {
-            html += buildRowHtml(table.rows[i], cols);
+            html += section.kind === 'mc'
+                ? buildMcRow(table.rows[i], cols, section.cols === 12)
+                : buildLcRow(table.rows[i], cols);
         }
-
-        if (!html) {
-            tbody.innerHTML = '<tr><td colspan="12">No MC 26.27 rows found in the sheet yet.</td></tr>';
-        } else {
-            tbody.innerHTML = html;
-        }
-
-        if (status) {
-            status.innerHTML = 'Live from the AIESEC in Egypt sheet · updates appear when you refresh · <a href="' +
-                SHEET_EDIT_URL + '" target="_blank" rel="noopener">Open sheet</a>';
-        }
+        tbody.innerHTML = html || '<tr><td colspan="' + section.cols + '">No rows in this sheet tab yet.</td></tr>';
+        tbody.setAttribute('data-loaded', '1');
+        setStatus(section, 'Live from Google Sheet · refresh the page to see new edits.', true);
     }
 
-    function fail(message) {
-        var tbody = document.getElementById('mc-2627-body');
-        var status = document.getElementById('mc-2627-status');
+    function failSection(section, message) {
+        var tbody = document.getElementById(section.id + '-body');
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="12">' + escapeHtml(message) +
-                ' <a href="' + SHEET_EDIT_URL + '" target="_blank" rel="noopener">Open the sheet</a></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="' + section.cols + '">' + escapeHtml(message) + '</td></tr>';
         }
-        if (status) {
-            status.innerHTML = 'Could not load live data. <a href="' + SHEET_EDIT_URL +
-                '" target="_blank" rel="noopener">Open sheet</a>';
-        }
+        setStatus(section, message, false);
+    }
+
+    function parseGvizText(text) {
+        var start = text.indexOf('{');
+        var end = text.lastIndexOf('}');
+        if (start < 0 || end < start) throw new Error('Could not parse sheet response');
+        return JSON.parse(text.slice(start, end + 1));
+    }
+
+    function fetchGviz(gid) {
+        var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+            '/gviz/tq?tqx=out:json&gid=' + gid + '&t=' + Date.now();
+        return fetch(url, { cache: 'no-store' }).then(function (res) {
+            if (!res.ok) throw new Error('Sheet HTTP ' + res.status);
+            return res.text();
+        }).then(parseGvizText);
+    }
+
+    function fetchLocal(gid) {
+        var url = '../data/' + gid + '.json?t=' + Date.now();
+        return fetch(url, { cache: 'no-store' }).then(function (res) {
+            if (!res.ok) throw new Error('local ' + res.status);
+            return res.json();
+        });
+    }
+
+    function loadSection(section) {
+        return fetchLocal(section.gid).catch(function () {
+            return fetchGviz(section.gid);
+        }).then(function (payload) {
+            if (!payload || payload.status === 'error') {
+                throw new Error('The sheet tab is not publicly viewable.');
+            }
+            renderSection(section, payload);
+        }).catch(function (err) {
+            failSection(section, err.message || 'Could not load this tab.');
+        });
     }
 
     function finish() {
@@ -135,50 +203,12 @@
     }
 
     function load() {
-        var tbody = document.getElementById('mc-2627-body');
-        if (!tbody) {
-            finish();
-            return;
-        }
-
-        window.google = window.google || {};
-        window.google.visualization = window.google.visualization || {};
-        window.google.visualization.Query = window.google.visualization.Query || {};
-        window.google.visualization.Query.setResponse = function (payload) {
-            try {
-                if (!payload || payload.status !== 'ok') {
-                    throw new Error((payload && payload.errors && payload.errors[0] && payload.errors[0].detailed_message) || 'Sheet is not public');
-                }
-                renderTable(payload);
-            } catch (err) {
-                fail(err.message || 'Could not read the sheet.');
-            }
-            finish();
-        };
-
-        var script = document.createElement('script');
-        script.src = GVIZ_URL;
-        script.onerror = function () {
-            fail('Could not reach Google Sheets.');
-            finish();
-        };
-        document.head.appendChild(script);
-
+        var jobs = SECTIONS.map(loadSection);
+        Promise.all(jobs).then(finish).catch(finish);
         setTimeout(function () {
-            if (!tbody.querySelector('tr[data-loading]') && tbody.getAttribute('data-loaded') === '1') return;
-            if (tbody.querySelector('tr[data-loading]')) {
-                fail('The sheet took too long to load. Make sure it is shared with “Anyone with the link”.');
-                finish();
-            }
-        }, 12000);
+            finish();
+        }, 15000);
     }
-
-    var originalRender = renderTable;
-    renderTable = function (data) {
-        originalRender(data);
-        var tbody = document.getElementById('mc-2627-body');
-        if (tbody) tbody.setAttribute('data-loaded', '1');
-    };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', load);
